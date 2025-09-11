@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, type PropsWithChildren } from 'react'
 
 interface Language {
   code: string
@@ -68,7 +68,7 @@ const translations: Record<string, Record<string, string>> = {
   }
 }
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
+export function LanguageProvider({ children }: PropsWithChildren) {
   const [currentLanguage, setCurrentLanguage] = useState<Language>(languages[0])
 
   const setLanguage = (language: Language) => {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Sidebar } from './components/sidebar'
 import { Header } from './components/header'
 import { Dashboard } from './components/dashboard'
@@ -10,8 +10,11 @@ import { WaterAvailability } from './components/water-availability'
 import { DiseaseDetection } from './components/disease-detection'
 import { MarketPrices } from './components/market-prices'
 import { GovernmentSchemes } from './components/government-schemes'
+import { Profile } from './components/profile'
+import { Settings } from './components/settings'
 import { Chatbot } from './components/chatbot'
 import { LanguageProvider } from './components/language-provider'
+import { ThemeProvider } from './components/theme-provider'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -36,23 +39,29 @@ export default function App() {
         return <MarketPrices />
       case 'government-schemes':
         return <GovernmentSchemes />
+      case 'profile':
+        return <Profile />
+      case 'settings':
+        return <Settings />
       default:
         return <Dashboard />
     }
   }
 
   return (
-    <LanguageProvider>
-      <div className="flex h-screen bg-background">
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <Header />
-          <main className="flex-1 overflow-y-auto p-6">
-            {renderContent()}
-          </main>
+    <ThemeProvider>
+      <LanguageProvider>
+        <div className="flex h-screen bg-background">
+          <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <Header setActiveTab={setActiveTab} />
+            <main className="flex-1 overflow-y-auto p-6">
+              {renderContent()}
+            </main>
+          </div>
+          <Chatbot />
         </div>
-        <Chatbot />
-      </div>
-    </LanguageProvider>
+      </LanguageProvider>
+    </ThemeProvider>
   )
 }

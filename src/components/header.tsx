@@ -5,7 +5,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useLanguage } from './language-provider'
 import { Bell, Settings, User, Globe } from 'lucide-react'
 
-export function Header() {
+interface HeaderProps {
+  setActiveTab?: (tab: string) => void
+}
+
+export function Header({ setActiveTab }: HeaderProps) {
   const { currentLanguage, setLanguage, languages } = useLanguage()
   const [notifications] = useState(3)
 
@@ -62,12 +66,12 @@ export function Header() {
           </Button>
 
           {/* Settings */}
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" onClick={() => setActiveTab && setActiveTab('settings')}>
             <Settings className="h-4 w-4" />
           </Button>
 
           {/* Profile */}
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" onClick={() => setActiveTab && setActiveTab('profile')}>
             <User className="h-4 w-4" />
           </Button>
         </div>
