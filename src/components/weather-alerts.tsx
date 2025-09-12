@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
 import { Badge } from './ui/badge'
@@ -17,6 +17,7 @@ import {
   Calendar,
   Activity
 } from 'lucide-react'
+import { fetchCurrentWeatherByQuery, fetchForecastByQuery, type CurrentWeatherResponse, type ForecastResponse } from '../lib/weather'
 
 interface WeatherAlert {
   id: string
@@ -43,18 +44,36 @@ interface PestAlert {
 
 export function WeatherAlerts() {
   const { translate } = useLanguage()
-  const [location, setLocation] = useState('')
+  const [location, setLocation] = useState('Punjab, IN')
+  const [current, setCurrent] = useState<CurrentWeatherResponse | null>(null)
+  const [forecastRes, setForecastRes] = useState<ForecastResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const currentWeather = {
-    location: 'Punjab, India',
-    temperature: 28,
-    humidity: 65,
-    windSpeed: 12,
-    rainfall: 2.5,
-    condition: 'Partly Cloudy',
-    uvIndex: 6,
-    visibility: 10
-  }
+  useEffect(() => {
+    let active = true
+    async function run() {
+      if (!location) return
+      setLoading(true)
+      setError(null)
+      try {
+        const [cw, fc] = await Promise.all([
+          fetchCurrentWeatherByQuery(location),
+          fetchForecastByQuery(location)
+        ])
+        if (!active) return
+        setCurrent(cw)
+        setForecastRes(fc)
+      } catch (e: any) {
+        if (!active) return
+        setError(e?.message || 'Failed to fetch weather')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    run()
+    return () => { active = false }
+  }, [location])
 
   const weatherAlerts: WeatherAlert[] = [
     {
@@ -152,13 +171,22 @@ export function WeatherAlerts() {
     }
   }
 
-  const forecast = [
-    { day: 'Today', high: 28, low: 15, condition: 'Partly Cloudy', rain: 10 },
-    { day: 'Tomorrow', high: 25, low: 12, condition: 'Rainy', rain: 80 },
-    { day: 'Day 3', high: 22, low: 8, condition: 'Heavy Rain', rain: 90 },
-    { day: 'Day 4', high: 26, low: 11, condition: 'Cloudy', rain: 30 },
-    { day: 'Day 5', high: 29, low: 16, condition: 'Sunny', rain: 5 }
-  ]
+  const forecast = useMemo(() => {
+    if (!forecastRes) return [] as { day: string; high: number; low: number; condition: string; rain: number }[]
+    const days = new Map<string, { min: number; max: number; condition: string; pop: number }>()
+    for (const item of forecastRes.list) {
+      const d = new Date(item.dt * 1000)
+      const key = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+      const min = item.main.temp_min
+      const max = item.main.temp_max
+      const condition = item.weather[0]?.description ?? '—'
+      const pop = Math.round((item.pop ?? 0) * 100)
+      const prev = days.get(key)
+      if (!prev) days.set(key, { min, max, condition, pop })
+      else days.set(key, { min: Math.min(prev.min, min), max: Math.max(prev.max, max), condition: prev.condition, pop: Math.max(prev.pop, pop) })
+    }
+    return Array.from(days.entries()).slice(0, 5).map(([day, v]) => ({ day, high: Math.round(v.max), low: Math.round(v.min), condition: v.condition, rain: v.pop }))
+  }, [forecastRes])
 
   return (
     <div className="space-y-6">
@@ -188,8 +216,9 @@ export function WeatherAlerts() {
                 placeholder="e.g., District, State"
               />
             </div>
-            <Button className="mt-6">Update Location</Button>
+            <Button className="mt-6" onClick={() => setLocation(location)}>Update Location</Button>
           </div>
+          {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
         </CardContent>
       </Card>
 
@@ -198,47 +227,43 @@ export function WeatherAlerts() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Sun className="h-5 w-5" />
-            Current Weather - {currentWeather.location}
+            Current Weather {current ? `- ${current.name}` : ''}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-            <div className="text-center p-3 bg-muted/50 rounded-lg">
-              <Thermometer className="h-6 w-6 mx-auto mb-2 text-red-500" />
-              <p className="text-sm text-muted-foreground">Temperature</p>
-              <p className="font-medium">{currentWeather.temperature}°C</p>
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          ) : current ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+              <div className="text-center p-3 bg-muted/50 rounded-lg">
+                <Thermometer className="h-6 w-6 mx-auto mb-2 text-red-500" />
+                <p className="text-sm text-muted-foreground">Temperature</p>
+                <p className="font-medium">{Math.round(current.main.temp)}°C</p>
+              </div>
+              <div className="text-center p-3 bg-muted/50 rounded-lg">
+                <Droplets className="h-6 w-6 mx-auto mb-2 text-blue-500" />
+                <p className="text-sm text-muted-foreground">Humidity</p>
+                <p className="font-medium">{current.main.humidity}%</p>
+              </div>
+              <div className="text-center p-3 bg-muted/50 rounded-lg">
+                <Wind className="h-6 w-6 mx-auto mb-2 text-gray-500" />
+                <p className="text-sm text-muted-foreground">Wind Speed</p>
+                <p className="font-medium">{Math.round(current.wind.speed)} m/s</p>
+              </div>
+              <div className="text-center p-3 bg-muted/50 rounded-lg">
+                <CloudRain className="h-6 w-6 mx-auto mb-2 text-blue-600" />
+                <p className="text-sm text-muted-foreground">Condition</p>
+                <p className="font-medium text-sm">{current.weather[0]?.description ?? '—'}</p>
+              </div>
+              <div className="text-center p-3 bg-muted/50 rounded-lg">
+                <Sun className="h-6 w-6 mx-auto mb-2 text-yellow-500" />
+                <p className="text-sm text-muted-foreground">Visibility</p>
+                <p className="font-medium">{Math.round((current.visibility ?? 0) / 1000)} km</p>
+              </div>
             </div>
-            <div className="text-center p-3 bg-muted/50 rounded-lg">
-              <Droplets className="h-6 w-6 mx-auto mb-2 text-blue-500" />
-              <p className="text-sm text-muted-foreground">Humidity</p>
-              <p className="font-medium">{currentWeather.humidity}%</p>
-            </div>
-            <div className="text-center p-3 bg-muted/50 rounded-lg">
-              <Wind className="h-6 w-6 mx-auto mb-2 text-gray-500" />
-              <p className="text-sm text-muted-foreground">Wind Speed</p>
-              <p className="font-medium">{currentWeather.windSpeed} km/h</p>
-            </div>
-            <div className="text-center p-3 bg-muted/50 rounded-lg">
-              <CloudRain className="h-6 w-6 mx-auto mb-2 text-blue-600" />
-              <p className="text-sm text-muted-foreground">Rainfall</p>
-              <p className="font-medium">{currentWeather.rainfall} mm</p>
-            </div>
-            <div className="text-center p-3 bg-muted/50 rounded-lg">
-              <Sun className="h-6 w-6 mx-auto mb-2 text-yellow-500" />
-              <p className="text-sm text-muted-foreground">Condition</p>
-              <p className="font-medium text-sm">{currentWeather.condition}</p>
-            </div>
-            <div className="text-center p-3 bg-muted/50 rounded-lg">
-              <Activity className="h-6 w-6 mx-auto mb-2 text-orange-500" />
-              <p className="text-sm text-muted-foreground">UV Index</p>
-              <p className="font-medium">{currentWeather.uvIndex}</p>
-            </div>
-            <div className="text-center p-3 bg-muted/50 rounded-lg">
-              <Activity className="h-6 w-6 mx-auto mb-2 text-purple-500" />
-              <p className="text-sm text-muted-foreground">Visibility</p>
-              <p className="font-medium">{currentWeather.visibility} km</p>
-            </div>
-          </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Enter a valid location to fetch weather.</p>
+          )}
         </CardContent>
       </Card>
 
