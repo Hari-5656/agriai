@@ -17,7 +17,10 @@ import { LanguageProvider } from './components/language-provider'
 import { ThemeProvider } from './components/theme-provider'
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard')
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window === 'undefined') return 'dashboard'
+    return window.localStorage.getItem('agriai-default-tab') || 'dashboard'
+  })
 
   const renderContent = () => {
     switch (activeTab) {

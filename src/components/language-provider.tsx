@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type PropsWithChildren } from 'react'
+import React, { createContext, useContext, useState, type PropsWithChildren } from 'react'
 
 interface Language {
   code: string
@@ -69,10 +69,16 @@ const translations: Record<string, Record<string, string>> = {
 }
 
 export function LanguageProvider({ children }: PropsWithChildren) {
-  const [currentLanguage, setCurrentLanguage] = useState<Language>(languages[0])
+  const [currentLanguage, setCurrentLanguage] = useState<Language>(() => {
+    if (typeof window === 'undefined') return languages[0]
+    const saved = window.localStorage.getItem('agriai-language')
+    const found = saved ? languages.find(l => l.code === saved) : undefined
+    return found || languages[0]
+  })
 
   const setLanguage = (language: Language) => {
     setCurrentLanguage(language)
+    try { window.localStorage.setItem('agriai-language', language.code) } catch {}
   }
 
   const translate = (key: string): string => {
