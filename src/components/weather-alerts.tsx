@@ -17,7 +17,7 @@ import {
   Calendar,
   Activity
 } from 'lucide-react'
-import { fetchCurrentWeatherByQuery, fetchForecastByQuery, type CurrentWeatherResponse, type ForecastResponse } from '../lib/weather'
+import { fetchCurrentWeatherByQuery, fetchForecastByQuery, type RapidCurrentResponse, type RapidForecastResponse } from '../lib/weather'
 
 interface WeatherAlert {
   id: string
@@ -45,8 +45,8 @@ interface PestAlert {
 export function WeatherAlerts() {
   const { translate } = useLanguage()
   const [location, setLocation] = useState('Punjab, IN')
-  const [current, setCurrent] = useState<CurrentWeatherResponse | null>(null)
-  const [forecastRes, setForecastRes] = useState<ForecastResponse | null>(null)
+  const [current, setCurrent] = useState<RapidCurrentResponse | null>(null)
+  const [forecastRes, setForecastRes] = useState<RapidForecastResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -57,10 +57,14 @@ export function WeatherAlerts() {
       setLoading(true)
       setError(null)
       try {
-        const [cw, fc] = await Promise.all([
-          fetchCurrentWeatherByQuery(location),
-          fetchForecastByQuery(location)
-        ])
+        const cw = await fetchCurrentWeatherByQuery(location)
+        let fc: RapidForecastResponse | null = null
+        try {
+          fc = await fetchForecastByQuery(location)
+        } catch (e: any) {
+          console.warn('Forecast fetch failed:', e?.message)
+          setError((prev) => prev ?? (e?.message || 'Forecast fetch failed'))
+        }
         if (!active) return
         setCurrent(cw)
         setForecastRes(fc)
@@ -227,7 +231,7 @@ export function WeatherAlerts() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Sun className="h-5 w-5" />
-            Current Weather {current ? `- ${current.name}` : ''}
+            Current Weather {current ? `- ${current.location.name}` : ''}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -238,27 +242,27 @@ export function WeatherAlerts() {
               <div className="text-center p-3 bg-muted/50 rounded-lg">
                 <Thermometer className="h-6 w-6 mx-auto mb-2 text-red-500" />
                 <p className="text-sm text-muted-foreground">Temperature</p>
-                <p className="font-medium">{Math.round(current.main.temp)}°C</p>
+                <p className="font-medium">{Math.round(current.current.temp_c)}°C</p>
               </div>
               <div className="text-center p-3 bg-muted/50 rounded-lg">
                 <Droplets className="h-6 w-6 mx-auto mb-2 text-blue-500" />
                 <p className="text-sm text-muted-foreground">Humidity</p>
-                <p className="font-medium">{current.main.humidity}%</p>
+                <p className="font-medium">{current.current.humidity}%</p>
               </div>
               <div className="text-center p-3 bg-muted/50 rounded-lg">
                 <Wind className="h-6 w-6 mx-auto mb-2 text-gray-500" />
                 <p className="text-sm text-muted-foreground">Wind Speed</p>
-                <p className="font-medium">{Math.round(current.wind.speed)} m/s</p>
+                <p className="font-medium">{Math.round(current.current.wind_kph)} km/h</p>
               </div>
               <div className="text-center p-3 bg-muted/50 rounded-lg">
                 <CloudRain className="h-6 w-6 mx-auto mb-2 text-blue-600" />
                 <p className="text-sm text-muted-foreground">Condition</p>
-                <p className="font-medium text-sm">{current.weather[0]?.description ?? '—'}</p>
+                <p className="font-medium text-sm">{current.current.condition.text}</p>
               </div>
               <div className="text-center p-3 bg-muted/50 rounded-lg">
                 <Sun className="h-6 w-6 mx-auto mb-2 text-yellow-500" />
                 <p className="text-sm text-muted-foreground">Visibility</p>
-                <p className="font-medium">{Math.round((current.visibility ?? 0) / 1000)} km</p>
+                <p className="font-medium">{Math.round(current.current.vis_km)} km</p>
               </div>
             </div>
           ) : (
