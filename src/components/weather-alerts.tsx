@@ -5,6 +5,8 @@ import { Badge } from './ui/badge'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { useLanguage } from './language-provider'
+import { useNotifications } from '../contexts/NotificationContext'
+import { NotificationService } from '../lib/notification-service'
 import { 
   CloudRain, 
   Sun, 
@@ -15,9 +17,28 @@ import {
   Bell,
   MapPin,
   Calendar,
-  Activity
+  Activity,
+  Navigation,
+  RefreshCw,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  AlertCircle
 } from 'lucide-react'
-import { fetchCurrentWeatherByQuery, fetchForecastByQuery, type RapidCurrentResponse, type RapidForecastResponse } from '../lib/weather'
+import { 
+  fetchCurrentWeatherByQuery, 
+  fetchForecastByQuery, 
+  fetchCurrentWeatherByCoordinates,
+  fetchForecastByCoordinates,
+  type RapidCurrentResponse, 
+  type RapidForecastResponseLike 
+} from '../lib/weather'
+import { 
+  locationService, 
+  type LocationData, 
+  type LocationError,
+  type LocationPermission 
+} from '../lib/location-service'
 
 interface WeatherAlert {
   id: string
@@ -44,11 +65,80 @@ interface PestAlert {
 
 export function WeatherAlerts() {
   const { translate } = useLanguage()
+  const { addNotification } = useNotifications()
   const [location, setLocation] = useState('Punjab, IN')
   const [current, setCurrent] = useState<RapidCurrentResponse | null>(null)
-  const [forecastRes, setForecastRes] = useState<RapidForecastResponse | null>(null)
+  const [forecastRes, setForecastRes] = useState<RapidForecastResponseLike | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // Location-related state
+  const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null)
+  const [locationPermission, setLocationPermission] = useState<LocationPermission>({
+    granted: false,
+    denied: false,
+    prompt: true
+  })
+  const [locationLoading, setLocationLoading] = useState(false)
+  const [locationError, setLocationError] = useState<string | null>(null)
+  const [useCurrentLocation, setUseCurrentLocation] = useState(false)
+
+  // Check location permission on mount
+  useEffect(() => {
+    const checkPermission = async () => {
+      const permission = locationService.getPermissionStatus()
+      setLocationPermission(permission)
+      
+      // Try to get cached location
+      const cached = locationService.getCachedLocation()
+      if (cached) {
+        setCurrentLocation(cached)
+        setUseCurrentLocation(true)
+      }
+    }
+    checkPermission()
+  }, [])
+
+  // Handle getting current location
+  const handleGetCurrentLocation = async () => {
+    setLocationLoading(true)
+    setLocationError(null)
+    
+    try {
+      const locationData = await locationService.getCurrentLocation()
+      setCurrentLocation(locationData)
+      setUseCurrentLocation(true)
+      setLocation(locationService.formatLocation(locationData))
+      
+      // Update permission status
+      const permission = locationService.getPermissionStatus()
+      setLocationPermission(permission)
+      
+      addNotification({
+        id: `location-${Date.now()}`,
+        type: 'success',
+        title: 'Location Updated',
+        message: `Weather updated for ${locationService.formatLocation(locationData)}`,
+        timestamp: new Date()
+      })
+    } catch (error: any) {
+      setLocationError(error.message || 'Failed to get current location')
+      setLocationPermission({
+        granted: false,
+        denied: error.type === 'permission',
+        prompt: error.type !== 'permission',
+        error: error.message
+      })
+    } finally {
+      setLocationLoading(false)
+    }
+  }
+
+  // Handle manual location update
+  const handleLocationUpdate = () => {
+    setUseCurrentLocation(false)
+    setCurrentLocation(null)
+  }
 
   useEffect(() => {
     let active = true
@@ -57,17 +147,79 @@ export function WeatherAlerts() {
       setLoading(true)
       setError(null)
       try {
-        const cw = await fetchCurrentWeatherByQuery(location)
-        let fc: RapidForecastResponse | null = null
-        try {
-          fc = await fetchForecastByQuery(location)
-        } catch (e: any) {
-          console.warn('Forecast fetch failed:', e?.message)
-          setError((prev) => prev ?? (e?.message || 'Forecast fetch failed'))
+        let cw: RapidCurrentResponse
+        let fc: RapidForecastResponseLike | null = null
+
+        if (useCurrentLocation && currentLocation) {
+          // Use current location coordinates
+          cw = await fetchCurrentWeatherByCoordinates(
+            currentLocation.latitude,
+            currentLocation.longitude,
+            currentLocation.address?.city,
+            currentLocation.address?.state,
+            currentLocation.address?.country
+          )
+          try {
+            fc = await fetchForecastByCoordinates(
+              currentLocation.latitude,
+              currentLocation.longitude
+            )
+          } catch (e: any) {
+            console.warn('Forecast fetch failed:', e?.message)
+            setError((prev) => prev ?? (e?.message || 'Forecast fetch failed'))
+          }
+        } else {
+          // Use location query
+          cw = await fetchCurrentWeatherByQuery(location)
+          try {
+            fc = await fetchForecastByQuery(location)
+          } catch (e: any) {
+            console.warn('Forecast fetch failed:', e?.message)
+            setError((prev) => prev ?? (e?.message || 'Forecast fetch failed'))
+          }
         }
+        
         if (!active) return
         setCurrent(cw)
         setForecastRes(fc)
+
+        // Generate weather notifications based on conditions
+        if (cw) {
+          // Temperature alerts
+          if (cw.current.temp_c > 40) {
+            addNotification(NotificationService.generateWeatherNotification(
+              'temperature', 'urgent', location, { temp: Math.round(cw.current.temp_c) }
+            ))
+          } else if (cw.current.temp_c < 5) {
+            addNotification(NotificationService.generateWeatherNotification(
+              'temperature', 'high', location, { temp: Math.round(cw.current.temp_c) }
+            ))
+          }
+
+          // Wind alerts
+          if (cw.current.wind_kph > 50) {
+            addNotification(NotificationService.generateWeatherNotification(
+              'wind', 'high', location, { speed: Math.round(cw.current.wind_kph) }
+            ))
+          }
+
+          // Humidity alerts
+          if (cw.current.humidity < 30) {
+            addNotification(NotificationService.generateWeatherNotification(
+              'drought', 'high', location, { humidity: cw.current.humidity }
+            ))
+          }
+        }
+
+        // Forecast-based notifications
+        if (fc) {
+          const highRainDays = fc.list.filter(item => (item.pop || 0) > 0.7).length
+          if (highRainDays > 0) {
+            addNotification(NotificationService.generateWeatherNotification(
+              'rain', 'high', location, { amount: 'Heavy', days: highRainDays }
+            ))
+          }
+        }
       } catch (e: any) {
         if (!active) return
         setError(e?.message || 'Failed to fetch weather')
@@ -77,7 +229,7 @@ export function WeatherAlerts() {
     }
     run()
     return () => { active = false }
-  }, [location])
+  }, [location, useCurrentLocation, currentLocation, addNotification])
 
   const weatherAlerts: WeatherAlert[] = [
     {
@@ -206,23 +358,91 @@ export function WeatherAlerts() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MapPin className="h-5 w-5" />
-            Set Your Location
+            {translate('setLocation')}
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <Label htmlFor="location">Enter your location</Label>
+        <CardContent className="space-y-4">
+          {/* Current Location Section */}
+          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+            <div className="flex items-center gap-3">
+              <Navigation className="h-5 w-5 text-blue-600" />
+              <div>
+                <p className="font-medium">Current Location</p>
+                <p className="text-sm text-muted-foreground">
+                  {currentLocation ? locationService.formatLocation(currentLocation) : 'Not available'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {locationPermission.granted && (
+                <CheckCircle className="h-4 w-4 text-green-600" />
+              )}
+              {locationPermission.denied && (
+                <XCircle className="h-4 w-4 text-red-600" />
+              )}
+              {locationPermission.prompt && !locationPermission.denied && (
+                <AlertCircle className="h-4 w-4 text-yellow-600" />
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGetCurrentLocation}
+                disabled={locationLoading}
+              >
+                {locationLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Navigation className="h-4 w-4" />
+                )}
+                {locationLoading ? 'Getting...' : 'Get Current Location'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Manual Location Input */}
+          <div className="space-y-2">
+            <Label htmlFor="location">{translate('enterLocation')}</Label>
+            <div className="flex gap-2">
               <Input
                 id="location"
                 value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="e.g., District, State"
+                onChange={(e) => {
+                  setLocation(e.target.value)
+                  handleLocationUpdate()
+                }}
+                placeholder="e.g., District, State, Place"
+                className="flex-1"
               />
+              <Button 
+                variant="outline"
+                onClick={() => setLocation(location)}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+              </Button>
             </div>
-            <Button className="mt-6" onClick={() => setLocation(location)}>Update Location</Button>
           </div>
-          {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+
+          {/* Status Messages */}
+          {locationError && (
+            <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+              <XCircle className="h-4 w-4" />
+              {locationError}
+            </div>
+          )}
+          
+          {error && (
+            <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+              <AlertTriangle className="h-4 w-4" />
+              {error}
+            </div>
+          )}
+
+          
         </CardContent>
       </Card>
 
@@ -231,7 +451,7 @@ export function WeatherAlerts() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Sun className="h-5 w-5" />
-            Current Weather {current ? `- ${current.location.name}` : ''}
+            {translate('currentWeather')} {current ? `- ${current.location.name}` : ''}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -241,27 +461,27 @@ export function WeatherAlerts() {
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
               <div className="text-center p-3 bg-muted/50 rounded-lg">
                 <Thermometer className="h-6 w-6 mx-auto mb-2 text-red-500" />
-                <p className="text-sm text-muted-foreground">Temperature</p>
+                <p className="text-sm text-muted-foreground">{translate('temperature')}</p>
                 <p className="font-medium">{Math.round(current.current.temp_c)}°C</p>
               </div>
               <div className="text-center p-3 bg-muted/50 rounded-lg">
                 <Droplets className="h-6 w-6 mx-auto mb-2 text-blue-500" />
-                <p className="text-sm text-muted-foreground">Humidity</p>
+                <p className="text-sm text-muted-foreground">{translate('humidity')}</p>
                 <p className="font-medium">{current.current.humidity}%</p>
               </div>
               <div className="text-center p-3 bg-muted/50 rounded-lg">
                 <Wind className="h-6 w-6 mx-auto mb-2 text-gray-500" />
-                <p className="text-sm text-muted-foreground">Wind Speed</p>
+                <p className="text-sm text-muted-foreground">{translate('windSpeed')}</p>
                 <p className="font-medium">{Math.round(current.current.wind_kph)} km/h</p>
               </div>
               <div className="text-center p-3 bg-muted/50 rounded-lg">
                 <CloudRain className="h-6 w-6 mx-auto mb-2 text-blue-600" />
-                <p className="text-sm text-muted-foreground">Condition</p>
+                <p className="text-sm text-muted-foreground">{translate('condition')}</p>
                 <p className="font-medium text-sm">{current.current.condition.text}</p>
               </div>
               <div className="text-center p-3 bg-muted/50 rounded-lg">
                 <Sun className="h-6 w-6 mx-auto mb-2 text-yellow-500" />
-                <p className="text-sm text-muted-foreground">Visibility</p>
+                <p className="text-sm text-muted-foreground">{translate('visibility')}</p>
                 <p className="font-medium">{Math.round(current.current.vis_km)} km</p>
               </div>
             </div>
@@ -276,7 +496,7 @@ export function WeatherAlerts() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            5-Day Weather Forecast
+            {translate('forecast')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -307,7 +527,7 @@ export function WeatherAlerts() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5" />
-              Weather Alerts
+              {translate('weatherAlertsTitle')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -368,7 +588,7 @@ export function WeatherAlerts() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Activity className="h-5 w-5" />
-              Pest & Disease Alerts
+              {translate('pestAlerts')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">

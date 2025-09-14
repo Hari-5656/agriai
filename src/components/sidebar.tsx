@@ -42,7 +42,7 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
             <Leaf className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold">AgriAI</h1>
+            <h1 className="text-lg font-semibold">AgriSwayam</h1>
             <p className="text-sm text-muted-foreground">Smart Farming Assistant</p>
           </div>
         </div>

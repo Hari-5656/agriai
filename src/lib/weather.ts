@@ -71,9 +71,19 @@ async function geocode(query: string) {
 
 export async function fetchCurrentWeatherByQuery(query: string): Promise<RapidCurrentResponse> {
   const place = await geocode(query)
+  return fetchCurrentWeatherByCoordinates(place.latitude, place.longitude, place.name, place.admin1 || '', place.country)
+}
+
+export async function fetchCurrentWeatherByCoordinates(
+  latitude: number, 
+  longitude: number, 
+  name?: string, 
+  region?: string, 
+  country?: string
+): Promise<RapidCurrentResponse> {
   const params = new URLSearchParams({
-    latitude: String(place.latitude),
-    longitude: String(place.longitude),
+    latitude: String(latitude),
+    longitude: String(longitude),
     current: ['temperature_2m', 'relative_humidity_2m', 'wind_speed_10m', 'weather_code', 'visibility'].join(','),
     timezone: 'auto',
   })
@@ -89,7 +99,11 @@ export async function fetchCurrentWeatherByQuery(query: string): Promise<RapidCu
   const conditionText = weatherCodeToDescription(Number(data?.current?.weather_code))
 
   const result: RapidCurrentResponse = {
-    location: { name: place.name, region: place.admin1 || '', country: place.country },
+    location: { 
+      name: name || `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`, 
+      region: region || '', 
+      country: country || '' 
+    },
     current: {
       temp_c: Math.round(tempC),
       humidity: Math.round(humidity),
@@ -103,9 +117,16 @@ export async function fetchCurrentWeatherByQuery(query: string): Promise<RapidCu
 
 export async function fetchForecastByQuery(query: string): Promise<RapidForecastResponseLike> {
   const place = await geocode(query)
+  return fetchForecastByCoordinates(place.latitude, place.longitude)
+}
+
+export async function fetchForecastByCoordinates(
+  latitude: number, 
+  longitude: number
+): Promise<RapidForecastResponseLike> {
   const params = new URLSearchParams({
-    latitude: String(place.latitude),
-    longitude: String(place.longitude),
+    latitude: String(latitude),
+    longitude: String(longitude),
     daily: ['temperature_2m_max', 'temperature_2m_min', 'precipitation_probability_max', 'weather_code'].join(','),
     timezone: 'auto',
     forecast_days: '5',

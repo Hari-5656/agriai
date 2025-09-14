@@ -3,6 +3,8 @@ import { Button } from './ui/button'
 import { Badge } from './ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { useLanguage } from './language-provider'
+import { useNotifications } from '../contexts/NotificationContext'
+import { NotificationCenter } from './notification-center'
 import { Bell, Settings, User, Globe } from 'lucide-react'
 
 interface HeaderProps {
@@ -11,7 +13,8 @@ interface HeaderProps {
 
 export function Header({ setActiveTab }: HeaderProps) {
   const { currentLanguage, setLanguage, languages } = useLanguage()
-  const [notifications] = useState(3)
+  const { state } = useNotifications()
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false)
 
   return (
     <header className="border-b border-border bg-card px-6 py-4">
@@ -56,11 +59,16 @@ export function Header({ setActiveTab }: HeaderProps) {
           </div>
 
           {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="relative"
+            onClick={() => setIsNotificationCenterOpen(true)}
+          >
             <Bell className="h-4 w-4" />
-            {notifications > 0 && (
+            {state.unreadCount > 0 && (
               <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 text-xs flex items-center justify-center">
-                {notifications}
+                {state.unreadCount}
               </Badge>
             )}
           </Button>
@@ -76,6 +84,12 @@ export function Header({ setActiveTab }: HeaderProps) {
           </Button>
         </div>
       </div>
+      
+      {/* Notification Center */}
+      <NotificationCenter 
+        isOpen={isNotificationCenterOpen}
+        onClose={() => setIsNotificationCenterOpen(false)}
+      />
     </header>
   )
 }

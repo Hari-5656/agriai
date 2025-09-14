@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, ReactNode } from 'react'
 import { Sidebar } from './components/sidebar'
 import { Header } from './components/header'
 import { Dashboard } from './components/dashboard'
@@ -15,6 +15,8 @@ import { Settings } from './components/settings'
 import { Chatbot } from './components/chatbot'
 import { LanguageProvider } from './components/language-provider'
 import { ThemeProvider } from './components/theme-provider'
+import { NotificationProvider } from './contexts/NotificationContext'
+import { AppDataProvider } from './contexts/AppDataContext'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(() => {
@@ -51,19 +53,27 @@ export default function App() {
     }
   }
 
+  const appContent = (
+    <div className="flex h-screen bg-background">
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header setActiveTab={setActiveTab} />
+        <main className="flex-1 overflow-y-auto p-6">
+          {renderContent()}
+        </main>
+      </div>
+      <Chatbot />
+    </div>
+  )
+
   return (
     <ThemeProvider>
       <LanguageProvider>
-        <div className="flex h-screen bg-background">
-          <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <Header setActiveTab={setActiveTab} />
-            <main className="flex-1 overflow-y-auto p-6">
-              {renderContent()}
-            </main>
-          </div>
-          <Chatbot />
-        </div>
+        <NotificationProvider>
+          <AppDataProvider>
+            {appContent}
+          </AppDataProvider>
+        </NotificationProvider>
       </LanguageProvider>
     </ThemeProvider>
   )

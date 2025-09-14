@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
 import { Badge } from './ui/badge'
@@ -7,7 +7,18 @@ import { Label } from './ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { Progress } from './ui/progress'
+import { Alert, AlertDescription } from './ui/alert'
+import { Skeleton } from './ui/skeleton'
 import { useLanguage } from './language-provider'
+import { 
+  governmentSchemesAPI, 
+  GovernmentScheme, 
+  SchemeApplication, 
+  EligibilityCriteria,
+  openOfficialWebsite,
+  getSchemeStatusColor,
+  getApplicationStatusColor
+} from '../lib/government-schemes-api'
 import { 
   FileText, 
   Users, 
@@ -27,318 +38,89 @@ import {
   Shield,
   Banknote,
   Tractor,
-  Droplets
+  Droplets,
+  Loader2,
+  RefreshCw,
+  Globe,
+  Info
 } from 'lucide-react'
 
-interface GovernmentScheme {
-  id: string
-  name: string
-  category: 'subsidy' | 'insurance' | 'loan' | 'welfare' | 'training' | 'technology'
-  description: string
-  benefits: string[]
-  eligibility: string[]
-  documents: string[]
-  applicationProcess: string[]
-  deadlineDate?: string
-  budget: string
-  ministry: string
-  status: 'active' | 'closed' | 'upcoming'
-  targetBeneficiaries: string
-  website?: string
-  helpline?: string
-}
-
-interface Application {
-  id: string
-  schemeName: string
-  applicationDate: string
-  status: 'submitted' | 'under-review' | 'approved' | 'rejected' | 'documents-required'
-  applicationNumber: string
-  lastUpdated: string
-  nextAction?: string
-}
+// Remove duplicate interfaces as they're now imported from the API service
 
 export function GovernmentSchemes() {
   const { translate } = useLanguage()
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [selectedState, setSelectedState] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [schemes, setSchemes] = useState<GovernmentScheme[]>([])
+  const [applications, setApplications] = useState<SchemeApplication[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [eligibilityResults, setEligibilityResults] = useState<GovernmentScheme[]>([])
+  const [eligibilityLoading, setEligibilityLoading] = useState(false)
 
-  const governmentSchemes: GovernmentScheme[] = [
-    {
-      id: '1',
-      name: 'PM-KISAN (Pradhan Mantri Kisan Samman Nidhi)',
-      category: 'subsidy',
-      description: 'Direct income support to farmers by providing ₹6,000 per year in three equal installments.',
-      benefits: [
-        '₹6,000 per year direct cash transfer',
-        'No interest or processing charges',
-        'Direct bank transfer every 4 months',
-        'Covers all farmer families across India'
-      ],
-      eligibility: [
-        'Small and marginal farmer families',
-        'Own cultivable land',
-        'Valid Aadhaar card required',
-        'Bank account with Aadhaar linking'
-      ],
-      documents: [
-        'Aadhaar Card',
-        'Bank Account Details',
-        'Land Ownership Documents',
-        'Mobile Number'
-      ],
-      applicationProcess: [
-        'Visit PM-KISAN portal or CSC center',
-        'Fill registration form with required details',
-        'Upload necessary documents',
-        'Submit application and get registration number',
-        'Track status online using registration number'
-      ],
-      budget: '₹87,217.50 crores (2024-25)',
-      ministry: 'Ministry of Agriculture & Farmers Welfare',
-      status: 'active',
-      targetBeneficiaries: '11+ crore farmers',
-      website: 'https://pmkisan.gov.in',
-      helpline: '011-24300677'
-    },
-    {
-      id: '2',
-      name: 'Pradhan Mantri Fasal Bima Yojana (PMFBY)',
-      category: 'insurance',
-      description: 'Crop insurance scheme providing financial support to farmers in case of crop failure due to natural calamities.',
-      benefits: [
-        'Low premium rates (1.5% for Rabi, 2% for Kharif)',
-        'Coverage against natural calamities',
-        'Use of technology for quick settlement',
-        'No limit on government subsidy'
-      ],
-      eligibility: [
-        'All farmers growing notified crops',
-        'Compulsory for loanee farmers',
-        'Voluntary for non-loanee farmers',
-        'Coverage from sowing to post-harvest'
-      ],
-      documents: [
-        'Aadhaar Card',
-        'Bank Account Details',
-        'Land Records (Khata/Khatauni)',
-        'Sowing Certificate',
-        'Loan Documents (if applicable)'
-      ],
-      applicationProcess: [
-        'Apply through bank, CSC, or insurance company',
-        'Submit application before cut-off date',
-        'Pay premium amount',
-        'Get policy document',
-        'Report crop loss within 72 hours if occurred'
-      ],
-      deadlineDate: '2025-01-31',
-      budget: '₹13,000 crores (2024-25)',
-      ministry: 'Ministry of Agriculture & Farmers Welfare',
-      status: 'active',
-      targetBeneficiaries: '5.5 crore farmers',
-      website: 'https://pmfby.gov.in',
-      helpline: '14447'
-    },
-    {
-      id: '3',
-      name: 'Kisan Credit Card (KCC)',
-      category: 'loan',
-      description: 'Credit facility for farmers to meet their cultivation and other agriculture-related expenses.',
-      benefits: [
-        'Flexible credit limit based on cropping pattern',
-        'Simple application process',
-        'Crop insurance coverage',
-        'ATM-cum-Debit card facility',
-        'Interest subvention benefit'
-      ],
-      eligibility: [
-        'Farmers (individual/joint) owner cultivators',
-        'Tenant farmers and sharecroppers',
-        'Self Help Group members',
-        'Age: 18-75 years'
-      ],
-      documents: [
-        'Application Form',
-        'Identity Proof (Aadhaar/Voter ID)',
-        'Address Proof',
-        'Land Documents',
-        'Income Certificate'
-      ],
-      applicationProcess: [
-        'Visit nearest bank branch',
-        'Fill KCC application form',
-        'Submit required documents',
-        'Bank verification and assessment',
-        'Approval and card issuance'
-      ],
-      budget: '₹4 lakh crores credit target',
-      ministry: 'Ministry of Agriculture & Farmers Welfare',
-      status: 'active',
-      targetBeneficiaries: '7+ crore farmers',
-      website: 'https://www.nabard.org/kcc',
-      helpline: '1800-180-1551'
-    },
-    {
-      id: '4',
-      name: 'Sub-Mission on Agricultural Mechanization (SMAM)',
-      category: 'technology',
-      description: 'Promotion of agricultural mechanization through subsidies on farm equipment and custom hiring centers.',
-      benefits: [
-        '40-50% subsidy on agricultural machinery',
-        'Custom Hiring Centers for small farmers',
-        'Training programs on modern equipment',
-        'Demonstration of new technologies'
-      ],
-      eligibility: [
-        'Individual farmers',
-        'Self Help Groups',
-        'Farmer Producer Organizations',
-        'Custom hiring service providers'
-      ],
-      documents: [
-        'Application Form',
-        'Aadhaar Card',
-        'Bank Account Details',
-        'Land Documents',
-        'Quotation from dealer'
-      ],
-      applicationProcess: [
-        'Apply through state agriculture department',
-        'Submit application with required documents',
-        'Technical committee verification',
-        'Approval and subsidy sanction',
-        'Purchase equipment and claim subsidy'
-      ],
-      budget: '₹1,033 crores (2024-25)',
-      ministry: 'Ministry of Agriculture & Farmers Welfare',
-      status: 'active',
-      targetBeneficiaries: '20+ lakh farmers',
-      website: 'https://agrimachinery.nic.in',
-      helpline: '011-23388506'
-    },
-    {
-      id: '5',
-      name: 'Pradhan Mantri Krishi Sinchai Yojana (PMKSY)',
-      category: 'subsidy',
-      description: 'Irrigation scheme focusing on water conservation and precision irrigation for sustainable agriculture.',
-      benefits: [
-        '90% financial assistance for micro-irrigation',
-        'Drip and sprinkler irrigation promotion',
-        'Water conservation techniques',
-        'Improved water use efficiency'
-      ],
-      eligibility: [
-        'All categories of farmers',
-        'Self Help Groups',
-        'Farmer Producer Organizations',
-        'Cooperative societies'
-      ],
-      documents: [
-        'Application Form',
-        'Land Ownership Certificate',
-        'Bank Account Details',
-        'Water Source Proof',
-        'Project Estimate'
-      ],
-      applicationProcess: [
-        'Apply through district collector office',
-        'Submit detailed project proposal',
-        'Technical scrutiny and field verification',
-        'Approval and fund release',
-        'Implementation and monitoring'
-      ],
-      budget: '₹93,068 crores (total allocation)',
-      ministry: 'Ministry of Agriculture & Farmers Welfare',
-      status: 'active',
-      targetBeneficiaries: '22+ lakh hectares coverage',
-      website: 'https://pmksy.gov.in',
-      helpLine: '011-23381008'
-    },
-    {
-      id: '6',
-      name: 'National Agriculture Market (e-NAM)',
-      category: 'technology',
-      description: 'Online trading platform for agricultural commodities to provide better price discovery.',
-      benefits: [
-        'Better price realization for farmers',
-        'Transparent auction process',
-        'Reduced transaction costs',
-        'Quality assaying facilities',
-        'Online payment system'
-      ],
-      eligibility: [
-        'Registered farmers',
-        'Licensed traders',
-        'Commission agents',
-        'Registered at integrated mandis'
-      ],
-      documents: [
-        'Farmer Registration Form',
-        'Identity Proof',
-        'Bank Account Details',
-        'Mobile Number',
-        'Gate Pass from mandi'
-      ],
-      applicationProcess: [
-        'Register at nearest integrated mandi',
-        'Create profile on e-NAM portal',
-        'Upload produce details and samples',
-        'Participate in online auction',
-        'Receive payment directly in bank account'
-      ],
-      budget: '₹2,849 crores (total project cost)',
-      ministry: 'Ministry of Agriculture & Farmers Welfare',
-      status: 'active',
-      targetBeneficiaries: '1.74+ crore farmers',
-      website: 'https://enam.gov.in',
-      helpline: '1800-270-0224'
-    }
-  ]
+  // Load schemes and applications on component mount
+  useEffect(() => {
+    loadSchemes()
+    loadApplications()
+  }, [])
 
-  const myApplications: Application[] = [
-    {
-      id: '1',
-      schemeName: 'PM-KISAN',
-      applicationDate: '2024-12-15',
-      status: 'approved',
-      applicationNumber: 'PMK2024123456',
-      lastUpdated: '2025-01-08',
-    },
-    {
-      id: '2',
-      schemeName: 'PMFBY - Wheat Insurance',
-      applicationDate: '2024-11-20',
-      status: 'under-review',
-      applicationNumber: 'PMFBY2024987654',
-      lastUpdated: '2025-01-05',
-      nextAction: 'Field verification pending'
-    },
-    {
-      id: '3',
-      schemeName: 'KCC Application',
-      applicationDate: '2024-10-10',
-      status: 'documents-required',
-      applicationNumber: 'KCC2024567890',
-      lastUpdated: '2024-12-20',
-      nextAction: 'Submit updated income certificate'
-    }
-  ]
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'bg-green-100 text-green-800'
-      case 'closed': return 'bg-red-100 text-red-800'
-      case 'upcoming': return 'bg-blue-100 text-blue-800'
-      case 'approved': return 'bg-green-100 text-green-800'
-      case 'under-review': return 'bg-yellow-100 text-yellow-800'
-      case 'submitted': return 'bg-blue-100 text-blue-800'
-      case 'documents-required': return 'bg-orange-100 text-orange-800'
-      case 'rejected': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
+  // Load schemes from API
+  const loadSchemes = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const data = await governmentSchemesAPI.getAllSchemes()
+      setSchemes(data)
+    } catch (err) {
+      setError('Failed to load government schemes. Please try again.')
+      console.error('Error loading schemes:', err)
+    } finally {
+      setLoading(false)
     }
   }
+
+  // Load user applications from API
+  const loadApplications = async () => {
+    try {
+      // In a real app, you'd get the user ID from authentication context
+      const userId = 'current-user-id'
+      const data = await governmentSchemesAPI.getUserApplications(userId)
+      setApplications(data)
+    } catch (err) {
+      console.error('Error loading applications:', err)
+    }
+  }
+
+  // Refresh data
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await Promise.all([loadSchemes(), loadApplications()])
+    setRefreshing(false)
+  }
+
+  // Handle official website visit
+  const handleVisitWebsite = (url: string) => {
+    openOfficialWebsite(url)
+  }
+
+  // Handle eligibility check
+  const handleEligibilityCheck = async (criteria: EligibilityCriteria) => {
+    try {
+      setEligibilityLoading(true)
+      const results = await governmentSchemesAPI.checkEligibility(criteria)
+      setEligibilityResults(results)
+    } catch (err) {
+      console.error('Error checking eligibility:', err)
+    } finally {
+      setEligibilityLoading(false)
+    }
+  }
+
+  // Use imported utility functions
+  const getStatusColor = getSchemeStatusColor
+  const getApplicationStatusColorFunc = getApplicationStatusColor
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
@@ -352,7 +134,7 @@ export function GovernmentSchemes() {
     }
   }
 
-  const filteredSchemes = governmentSchemes.filter(scheme => {
+  const filteredSchemes = schemes.filter(scheme => {
     const categoryMatch = selectedCategory === 'all' || scheme.category === selectedCategory
     const searchMatch = searchTerm === '' || 
       scheme.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -360,14 +142,67 @@ export function GovernmentSchemes() {
     return categoryMatch && searchMatch
   })
 
+  // Loading skeleton component
+  const SchemeSkeleton = () => (
+    <Card>
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-3">
+            <Skeleton className="h-5 w-5" />
+            <div>
+              <Skeleton className="h-6 w-64 mb-2" />
+              <Skeleton className="h-4 w-48" />
+            </div>
+          </div>
+          <Skeleton className="h-6 w-16" />
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-3/4" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-10 w-24" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+      </CardContent>
+    </Card>
+  )
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl mb-2">Government Schemes</h1>
-        <p className="text-muted-foreground">
-          Explore and apply for various government schemes and subsidies available for farmers
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl mb-2">Government Schemes</h1>
+          <p className="text-muted-foreground">
+            Explore and apply for various government schemes and subsidies available for farmers
+          </p>
+        </div>
+        <Button 
+          variant="outline" 
+          onClick={handleRefresh} 
+          disabled={refreshing}
+          className="flex items-center gap-2"
+        >
+          {refreshing ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          Refresh
+        </Button>
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       <Tabs defaultValue="schemes" className="space-y-6">
         <TabsList>
@@ -434,8 +269,24 @@ export function GovernmentSchemes() {
 
           {/* Schemes List */}
           <div className="space-y-4">
-            {filteredSchemes.map((scheme) => (
-              <Card key={scheme.id}>
+            {loading ? (
+              // Show loading skeletons
+              Array.from({ length: 3 }).map((_, index) => (
+                <SchemeSkeleton key={index} />
+              ))
+            ) : filteredSchemes.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <Info className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-medium mb-2">No schemes found</h3>
+                  <p className="text-muted-foreground">
+                    Try adjusting your search criteria or filters
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              filteredSchemes.map((scheme) => (
+                <Card key={scheme.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3">
@@ -513,21 +364,30 @@ export function GovernmentSchemes() {
                       View Details
                     </Button>
                     {scheme.website && (
-                      <Button variant="outline">
-                        <ExternalLink className="h-4 w-4 mr-2" />
+                      <Button 
+                        variant="outline" 
+                        onClick={() => handleVisitWebsite(scheme.website!)}
+                        className="flex items-center gap-2"
+                      >
+                        <Globe className="h-4 w-4" />
                         Official Website
                       </Button>
                     )}
                     {scheme.helpline && (
-                      <Button variant="outline">
-                        <Phone className="h-4 w-4 mr-2" />
+                      <Button 
+                        variant="outline"
+                        onClick={() => window.open(`tel:${scheme.helpline}`)}
+                        className="flex items-center gap-2"
+                      >
+                        <Phone className="h-4 w-4" />
                         {scheme.helpline}
                       </Button>
                     )}
                   </div>
                 </CardContent>
               </Card>
-            ))}
+              ))
+            )}
           </div>
         </TabsContent>
 
@@ -538,7 +398,16 @@ export function GovernmentSchemes() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {myApplications.map((application) => (
+                {applications.length === 0 ? (
+                  <div className="text-center p-8">
+                    <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-medium mb-2">No applications found</h3>
+                    <p className="text-muted-foreground">
+                      You haven't applied for any schemes yet
+                    </p>
+                  </div>
+                ) : (
+                  applications.map((application) => (
                   <div key={application.id} className="border border-border rounded-lg p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div>
@@ -547,7 +416,7 @@ export function GovernmentSchemes() {
                           Application #: {application.applicationNumber}
                         </p>
                       </div>
-                      <Badge className={getStatusColor(application.status)}>
+                      <Badge className={getApplicationStatusColorFunc(application.status)}>
                         {application.status.replace('-', ' ')}
                       </Badge>
                     </div>
@@ -609,7 +478,8 @@ export function GovernmentSchemes() {
                       )}
                     </div>
                   </div>
-                ))}
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>
@@ -661,13 +531,76 @@ export function GovernmentSchemes() {
                     </Select>
                   </div>
                 </div>
-                <Button className="w-full">
-                  <Search className="h-4 w-4 mr-2" />
+                <Button 
+                  className="w-full" 
+                  onClick={() => {
+                    const criteria: EligibilityCriteria = {
+                      landSize: parseFloat((document.getElementById('land-size') as HTMLInputElement)?.value || '0'),
+                      farmerCategory: (document.querySelector('[data-value]') as HTMLSelectElement)?.value as any,
+                      annualIncome: parseFloat((document.getElementById('annual-income') as HTMLInputElement)?.value || '0'),
+                      cropType: (document.querySelector('[data-value]') as HTMLSelectElement)?.value,
+                      state: selectedState !== 'all' ? selectedState : undefined
+                    }
+                    handleEligibilityCheck(criteria)
+                  }}
+                  disabled={eligibilityLoading}
+                >
+                  {eligibilityLoading ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Search className="h-4 w-4 mr-2" />
+                  )}
                   Check Eligible Schemes
                 </Button>
               </div>
             </CardContent>
           </Card>
+
+          {/* Eligibility Results */}
+          {eligibilityResults.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Eligible Schemes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {eligibilityResults.map((scheme) => (
+                    <div key={scheme.id} className="border border-border rounded-lg p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-start gap-3">
+                          {getCategoryIcon(scheme.category)}
+                          <div>
+                            <h4 className="font-medium">{scheme.name}</h4>
+                            <p className="text-sm text-muted-foreground">{scheme.ministry}</p>
+                          </div>
+                        </div>
+                        <Badge className={getStatusColor(scheme.status)}>
+                          {scheme.status}
+                        </Badge>
+                      </div>
+                      <p className="text-sm mb-3">{scheme.description}</p>
+                      <div className="flex gap-2">
+                        <Button size="sm">
+                          <FileText className="h-4 w-4 mr-1" />
+                          Apply Now
+                        </Button>
+                        {scheme.website && (
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleVisitWebsite(scheme.website!)}
+                          >
+                            <Globe className="h-4 w-4 mr-1" />
+                            Visit Website
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="documents" className="space-y-6">
