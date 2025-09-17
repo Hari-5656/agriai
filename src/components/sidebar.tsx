@@ -39,10 +39,10 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
       <div className="p-6">
         <div className="flex items-center gap-3 mb-8">
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <Leaf className="h-5 w-5 text-primary-foreground" />
+            <Leaf className="h-5 w-5  text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold">AgriSwayam</h1>
+            <h1 className="text-lg text-green-500 font-semibold">AgriSwayam</h1>
             <p className="text-sm text-muted-foreground">Smart Farming Assistant</p>
           </div>
         </div>

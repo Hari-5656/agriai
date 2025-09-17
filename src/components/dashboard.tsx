@@ -218,8 +218,8 @@ export function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
-      <div className="relative rounded-lg overflow-hidden">
-        <div className="w-full h-48 relative">
+      <div className="relative  rounded-lg overflow-hidden">
+        <div className=" w-full h-46 relative">
           <img 
             src="https://images.unsplash.com/photo-1594179131702-112ff2a880e4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxpbmRpYW4lMjBhZ3JpY3VsdHVyZSUyMGZhcm1pbmclMjBmaWVsZHMlMjBjcm9wc3xlbnwxfHx8fDE3NTc1MDY2ODB8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
             alt="Agricultural fields"
@@ -244,8 +244,8 @@ export function Dashboard() {
         </div>
         <div className="absolute inset-0 flex items-center justify-between px-6 z-20">
           <div className="text-center text-white flex-1">
-            <h1 className="text-3xl mb-2">{translate('welcomeFarmer')}</h1>
-            <p className="text-lg opacity-90">Your AI-powered farming companion</p>
+            <h1 className="text-5xl mb-2">{translate('welcomeFarmer')}</h1>
+            <p className="text-lg  opacity-90">Your AI-powered farming companion</p>
           </div>
           <div className="flex flex-col items-end gap-2">
             
