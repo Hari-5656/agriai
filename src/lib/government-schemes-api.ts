@@ -41,8 +41,8 @@ export interface EligibilityCriteria {
   age?: number
 }
 
-// Mock API endpoints - In production, these would be real government API endpoints
-const API_BASE_URL = 'https://api.agroswayam.gov.in/schemes'
+// API endpoints - configurable for development and production
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.agroswayam.gov.in/schemes'
 const EXTERNAL_APIS = {
   PM_KISAN: 'https://pmkisan.gov.in/api',
   PMFBY: 'https://pmfby.gov.in/api',
